@@ -11,13 +11,15 @@ const extractClassInfo = (classCell: cheerio.Element) => {
   const $ = cheerio.load(classCell);
   const classLink = $("a.white");
   const className = classLink.text();
+  // The AKC page uses some kind of framework for opening links with JavaScript, but since we're interacting with HTML,
+  // let's just parse out the path from the JavaScript code in the "href" attribute of the class link.
   const classHref =
     /openWin\('(?<href>[^']+)/g.exec(classLink.attr("href")!)!.groups!.href;
   return { className, classHref };
 };
 
 /**
- * Parses a judge cell
+ * Parses a judge cell.
  * @param judgeCell The <td> tag containing a judge anchor.
  * @returns The name of the judge, as well as a path to the judge's information.
  */
@@ -41,26 +43,34 @@ const extractEntriesInfo = (entriesCell: cheerio.Element) => {
     " ",
   ).trim();
   if (!entriesData) {
+    console.log("Entries data doesn't match:", $.text());
     console.log($.text());
     return;
   }
+  // Matches:
+  // (2ent) -> {entries: 2}
+  // (14 ent) 30 Secs -> {entries: 14, seconds: 30, yards: }
+  // (13 ent) 20.5 Secs 100 yds -> {entries: 13, seconds: 20.5, yards: 100}
+  // The regex ignores the whitespace in between each token, and will match only the parts that are present.
   const entriesAndSecondsAndYardsRegex =
     /(?<entries>\d+)\s*ent\)(\s*(?<seconds>[\d\.]+)\s*Sec(\s*(?<yards>[\d\.]+)\s*yds)?)?/gim;
   let matches = entriesAndSecondsAndYardsRegex.exec(entriesData);
+
+  // If we didn't match the entries data at all, or there aren't any match groups, return nothing.
   if (!matches || !matches.groups) {
     return;
   }
 
   let numEntries: number = parseInt(matches.groups.entries);
-  let numSeconds: number | null = null;
-  if (matches.groups.seconds) {
-    numSeconds = parseFloat(matches.groups.seconds);
-  }
+  let standardCompletionTime: number | null = null;
   let numYards: number | null = null;
+  if (matches.groups.seconds) {
+    standardCompletionTime = parseFloat(matches.groups.seconds);
+  }
   if (matches.groups.yards) {
     numYards = parseInt(matches.groups.yards);
   }
-  return { numEntries, numSeconds, numYards };
+  return { numEntries, standardCompletionTime, numYards };
 };
 
 const extractDogInfo = (dogCell: cheerio.Element) => {
@@ -71,13 +81,19 @@ const extractDogInfo = (dogCell: cheerio.Element) => {
     .replace(/\s+/g, " ");
   const dogHandler = dogCellTextContent.slice(
     dogCellTextContent.indexOf(dogBreed) + dogBreed?.length,
-  ).trim();
+  ).trim(); // The handler information immediately follows the dog's breed, so just slice the string from the end of the dog breed substring.
   const dogName = $(dogLink).text().replace(/\s+/g, " ").trim()!;
+  // The ID of the dog is buried in the href of the dog link, so parse the URL and extract the query parameter matching the ID.
   const dogId = new URL(`https://www.apps.akc.org${dogLink.attr("href")}`)
     .searchParams.get("dog_id")!;
   return { dogHandler, dogName, dogBreed, dogId };
 };
 
+/**
+ * Parses a points cell.
+ * @param pointsCell The <td> containing info about the performance of a dog that placed during the competition.
+ * @returns The number of points the dog scored, as well as what time they achieved.
+ */
 const extractPointsInfo = (pointsCell: cheerio.Element) => {
   const $ = cheerio.load(pointsCell);
   const pointsCellTextContent = $(pointsCell).text().replace(/\s/g, " ").trim();
@@ -89,113 +105,32 @@ const extractPointsInfo = (pointsCell: cheerio.Element) => {
   };
 };
 
-// const extractDataFromEventRows = (rows: Element[]) => {
-//   const filteredRows = rows.filter((row) =>
-//     row.children.length === 4 && row.children[1].hasAttribute("colspan") &&
-//     row.children[1].getAttribute("colspan") === "4"
-//   );
-//   const results = filteredRows.map((row) => {
-//     const [_, eventCell, judgeCell, entriesCell] = Array.from(row.children);
-//     const { judgeName, judgeHref } = extractJudgeInfo(judgeCell);
-//     const { className, classHref } = extractClassInfo(eventCell);
-//     const entriesInfo = extractEntriesInfo(
-//       entriesCell,
-//     );
-//     if (!entriesInfo) {
-//       return;
-//     }
-//     const { numEntries, numSeconds, numYards } = entriesInfo;
-//     return {
-//       className,
-//       classHref,
-//       judgeName,
-//       judgeHref,
-//       numEntries,
-//       numSeconds,
-//       numYards,
-//     };
-//   });
-//   return results;
-// };
-
-// const main = async () => {
-//   const browser = await puppeteer.launch({ headless: false });
-//   const page = await browser.newPage();
-//   await page.goto(
-//     "https://www.apps.akc.org/apps/events/search/index_results.cfm?action=plan&event_number=2020526309&get_event_by_number=yes&NEW_END_DATE1=",
-//   );
-//   await page.exposeFunction("extractClassInfo", extractClassInfo);
-//   await page.exposeFunction("extractEntriesInfo", extractEntriesInfo);
-//   await page.exposeFunction("extractJudgeInfo", extractJudgeInfo);
-//   const clubName = await page.$$eval(
-//     "html body table tbody tr td div center font b",
-//     (tags) => {
-//       return tags[0].textContent!;
-//     },
-//   );
-//   const eventResults = (await page.$$eval(
-//     "html body table tbody tr td div font table tbody tr",
-//     extractDataFromEventRows,
-//   )).filter((x) =>
-//     x !== undefined && (x.numSeconds !== null || x.numYards !== null)
-//   );
-
-//   const { results, errors } = await PromisePool.withConcurrency(10).for(
-//     eventResults,
-//   ).process(async (classData) => {
-//     const urlToTravelTo = `https://www.apps.akc.org${classData!.classHref}`;
-//     const detailsPage = await browser.newPage();
-//     await detailsPage.goto(urlToTravelTo);
-//     const placementResults = await detailsPage.$$eval(
-//       'td[align="right"] > font',
-//       (fontTags) => {
-//         if (fontTags.length === 0) {
-//           return;
-//         }
-//         return fontTags.map((fontTag) => {
-//           // Go up two parents on the DOM tree (which should be the tr this font tag is in).
-//           const parentRow = fontTag.parentElement!.parentElement;
-//           // Skip the first three cells of this row, because they are blank and don't contain data.
-//           const [
-//             _a,
-//             _b,
-//             _c,
-//             placeCell,
-//             dogCell,
-//           ] = Array.from(parentRow!.children);
-//           const place = placeCell.textContent!.replace(/\s+/g, " ").trim()!;
-//           const { dogBreed, dogHandler, dogName, dogId } = extractDogInfo(
-//             dogCell,
-//           );
-//           return { place, dogBreed, dogHandler, dogName, dogId };
-//         });
-//       },
-//     );
-//     await detailsPage.close();
-//     return { ...classData, placementResults };
-//   });
-//   writeFileSync(
-//     "output.json",
-//     JSON.stringify({ clubName, competitions: results }, null, 3),
-//   );
-//   await browser.close();
-// };
-
-const cheerioMain = async () => {
-  const html = await axios.get(
-    "https://www.apps.akc.org/apps/events/search/index_results.cfm?action=plan&event_number=2020526309&get_event_by_number=yes&NEW_END_DATE1=",
-  ).then((response) => response.data);
+const main = async (eventNumber: string) => {
+  const url =
+    `https://www.apps.akc.org/apps/events/search/index_results.cfm?action=plan&event_number=${eventNumber}&get_event_by_number=yes&NEW_END_DATE1=`;
+  console.log(url);
+  const html = await axios.get(url).then((response) => response.data);
   const $ = cheerio.load(html);
-  const clubNameTag = $(
+  const startDateTd = $(
+    "html body table tbody tr td table tbody tr td[width='50%']",
+  );
+  console.log(startDateTd.first().text().replace(/\s+/g, " "));
+  let clubNameTag = $(
     'html body table tbody tr td div center font[size="+2"] b',
   );
-  console.log(clubNameTag.text());
+  if (clubNameTag.text().trim() === "") {
+    clubNameTag = $(
+      'html body table tbody tr td div center table tbody tr td div table tbody tr td strong font[size="+2"]',
+    );
+  }
+  console.log("Club Name:", clubNameTag.text());
   // const eventDate = $('html body table tbody tr td div font table tbody tr td font font center').text();
   // console.log(eventDate);
   const competitionRows = $(
     "html body table tbody tr td div font table tbody tr",
   );
-  const filteredRows = competitionRows.filter((i, el) => {
+  // We don't care about rows that don't match the expected number of columns.
+  const filteredRows = competitionRows.filter((_i, el) => {
     if ($(el).children().length !== 4) {
       return false;
     }
@@ -214,22 +149,26 @@ const cheerioMain = async () => {
       entriesCell,
     );
     if (!entriesInfo) {
+      // We're only interested in competitions where there were entries.
       return;
     }
-    const { numEntries, numSeconds, numYards } = entriesInfo;
+    const { numEntries, standardCompletionTime, numYards } = entriesInfo;
     const competitionEntry = {
       className,
       classHref,
-      judgeName,
-      judgeHref,
+      judge: {
+        name: judgeName,
+        href: judgeHref,
+      },
       numEntries,
-      numSeconds,
+      standardCompletionTime,
       numYards,
     };
     competitionData.push(competitionEntry);
   }
+  // We're only interested in competitions where there's a standard completion time or a course distance.
   const filteredCompetitionData = competitionData.filter((x) =>
-    x.numSeconds !== null && x.numYards !== null
+    x.standardCompletionTime !== null && x.numYards !== null
   );
 
   const { results, errors } = await PromisePool.withConcurrency(20).for(
@@ -264,7 +203,7 @@ const cheerioMain = async () => {
     return finalEntry;
   });
   writeFileSync(
-    "output.json",
+    `outputs/${eventNumber}.json`,
     JSON.stringify(
       { clubName: clubNameTag.text(), competitions: results },
       null,
@@ -272,4 +211,67 @@ const cheerioMain = async () => {
     ),
   );
 };
-cheerioMain();
+
+const listEvents = async () => {
+  const today = new Date();
+  const mmDDYYYY = `${
+    today.getMonth() + 1
+  }/${today.getDate()}/${today.getFullYear()}`;
+  console.log(mmDDYYYY);
+  const response = await axios.post(
+    "https://webapps.akc.org/event-search/api/search/events",
+    {
+      "address": {
+        "eventSetting": {
+          "indoor": true,
+          "outdoor": true,
+          "outsideCovered": true,
+        },
+        "location": {
+          "cityState": "",
+          "latitude": 0,
+          "longitude": 0,
+          "zipCode": null,
+        },
+        "radius": "any",
+        "searchByState": false,
+        "searchByCity": false,
+        "searchText": "All Cities & States",
+      },
+      "breedCode": "4444",
+      "breedName": "All-American Dogs",
+      "breedId": "ALL_AMERICAN",
+      "dateRange": {
+        "from": "12/01/2021",
+        "to": mmDDYYYY,
+        "type": "event",
+      },
+      "competition": {
+        "items": [{
+          "selected": true,
+          "value": { "compType": "AG" },
+          "label": "Agility (AG)",
+        }],
+        "filters": [],
+      },
+    },
+    {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Content-Type": "application/json",
+        "x-csrf-token": "token",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+      },
+    },
+  );
+  for (const result of response.data.events) {
+    await main(result.eventNumber);
+  }
+};
+// main();
+listEvents();
