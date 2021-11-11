@@ -14,6 +14,7 @@ import {
   DOMParser,
   initParser,
 } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
+import { PromisePool } from "https://cdn.skypack.dev/@supercharge/promise-pool?dts";
 
 const START_YEAR = 2021;
 const START_MONTH = 0; // January
@@ -114,8 +115,9 @@ const extractCompetitionInfoForEvent = async (
   const filteredCompetitionData = competitionData.filter(
     (x) => x.standardCompletionTime !== null && x.numYards !== null,
   );
-
-  const results = filteredCompetitionData.map(async (competition) => {
+  const { results, errors } = await PromisePool.withConcurrency(10).for(
+    filteredCompetitionData,
+  ).process(async (competition) => {
     const detailsPageUrl = competition!.classHref;
     const detailsPageHtml = await fetch(detailsPageUrl).then((response) =>
       response.text()
@@ -157,6 +159,9 @@ const extractCompetitionInfoForEvent = async (
     const finalEntry = { ...competition, placements: detailsData };
     return finalEntry;
   });
+  for (const error of errors) {
+    console.error(`${url}: ${error.item}`)
+  }
   Deno.writeTextFile(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
     JSON.stringify(results),
@@ -233,8 +238,11 @@ const main = async () => {
       `Going to extract data for ${extractedFilteredEvents.length} events.`,
     );
     await initParser();
-    for (const event of extractedFilteredEvents) {
-      await extractCompetitionInfoForEvent(event);
+    const { errors } = await PromisePool.withConcurrency(10).for(
+      extractedFilteredEvents,
+    ).process(extractCompetitionInfoForEvent);
+    for (const error of errors) {
+      console.error(error);
     }
   }
 };
