@@ -164,7 +164,8 @@ const listEvents = async () => {
     );
     console.log(`Received a total of ${response.data.events.length} events between ${startMmDDYYYY} and ${endMmDDYYYY}.`);
     const extractedFilteredEvents = (response.data.events as Event[]).map(extractGeneralEventInfo).filter(event => event.endDate < today);
-    console.log(`Going to extract data for ${extractedFilteredEvents.length} events.`)
+    console.log(`Going to extract data for ${extractedFilteredEvents.length} events.`);
+    startDate = endDate;
     const { results, errors } = await PromisePool.withConcurrency(5).for(extractedFilteredEvents).process(extractCompetitionInfoForEvent)
     for (const error of errors) {
       console.log(error);
