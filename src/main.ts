@@ -12,6 +12,7 @@ import { extractDogInfo, extractPointsInfo } from "./placement-page.ts";
 
 import {
   DOMParser,
+  Element,
   initParser,
 } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
 import { PromisePool } from "https://cdn.skypack.dev/@supercharge/promise-pool?dts";
@@ -78,17 +79,18 @@ const extractCompetitionInfoForEvent = async (
   }
   console.log(`Captured ${competitionRows.length} rows.`);
   const filteredRows = Array.from(competitionRows).filter((value) => {
-    if (value.children.length !== 4) {
+    const elem = value as Element;
+    if (elem.children.length !== 4) {
       return false;
     }
-    const firstChild = value.children[1];
+    const firstChild = elem.children[1];
     return firstChild.hasAttribute("colspan") &&
       firstChild.getAttribute("colspan") === "4";
   });
   console.log(`Filtered down to ${filteredRows.length} rows.`);
   const competitionData = [];
   for (const row of filteredRows) {
-    const [_, eventCell, judgeCell, entriesCell] = Array.from(row.children);
+    const [_, eventCell, judgeCell, entriesCell] = Array.from((row as Element).children);
     const entriesInfo = extractEntriesInfo(entriesCell);
     const judgeInfo = extractJudgeInfo(judgeCell);
     const classInfo = extractClassInfo(eventCell);

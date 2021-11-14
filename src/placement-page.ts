@@ -1,4 +1,4 @@
-import { Element } from "https://deno.land/x/deno_dom@v0.1.17-alpha/src/api.ts";
+import { Element } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
 
 /**
  * Parses a cell containing information about a dog that placed in a competition.
