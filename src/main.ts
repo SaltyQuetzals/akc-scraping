@@ -65,6 +65,10 @@ const extractCompetitionInfoForEvent = async (
     `${DOMAIN}/apps/events/search/index_results.cfm?action=plan&event_number=${eventAndClubInfo.eventNumber}&get_event_by_number=yes&NEW_END_DATE1=`;
   console.log(url);
   const html = await fetch(url).then((response) => response.text());
+  await Deno.writeTextFile(
+    `outputs/${eventAndClubInfo.eventNumber}.html`,
+    html,
+  );
   const document = new DOMParser().parseFromString(html, "text/html");
   if (!document) {
     console.log(`Cannot parse html for ${url}.`);
@@ -77,7 +81,6 @@ const extractCompetitionInfoForEvent = async (
     console.log(`Could not find competition rows for ${url}`);
     return;
   }
-  console.log(`Captured ${competitionRows.length} rows.`);
   const filteredRows = Array.from(competitionRows).filter((value) => {
     const elem = value as Element;
     if (elem.children.length !== 4) {
@@ -87,10 +90,14 @@ const extractCompetitionInfoForEvent = async (
     return firstChild.hasAttribute("colspan") &&
       firstChild.getAttribute("colspan") === "4";
   });
-  console.log(`Filtered down to ${filteredRows.length} rows.`);
+  console.log(
+    `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows.`,
+  );
   const competitionData = [];
   for (const row of filteredRows) {
-    const [_, eventCell, judgeCell, entriesCell] = Array.from((row as Element).children);
+    const [_, eventCell, judgeCell, entriesCell] = Array.from(
+      (row as Element).children,
+    );
     const entriesInfo = extractEntriesInfo(entriesCell);
     const judgeInfo = extractJudgeInfo(judgeCell);
     const classInfo = extractClassInfo(eventCell);
@@ -162,9 +169,9 @@ const extractCompetitionInfoForEvent = async (
     return finalEntry;
   });
   for (const error of errors) {
-    console.error(`${url}: ${error.item}`)
+    console.error(`${url}: ${error.item}`);
   }
-  Deno.writeTextFile(
+  return Deno.writeTextFile(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
     JSON.stringify(results),
   );
