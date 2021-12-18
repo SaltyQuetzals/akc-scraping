@@ -22,6 +22,7 @@ const START_MONTH = 0; // January
 const START_DAY = 1;
 const START_DATE = new Date(START_YEAR, START_MONTH, START_DAY);
 const DOMAIN = "https://www.apps.akc.org";
+const PARALLEL_FACTOR = 10;
 
 /**
  * Constructs an array of intervals starting at the given start date and ending at the given end date.
@@ -106,11 +107,14 @@ const extractCompetitionInfoForEvent = async (
       return;
     }
     const { judgeName, judgeHref } = judgeInfo;
-    const { className, classHref } = classInfo;
+    const { runName, className, division, classHref, height } = classInfo;
     const { numEntries, standardCompletionTime, numYards } = entriesInfo;
     const competitionEntry = {
+      runName,
       className,
+      division,
       classHref: `${DOMAIN}${classHref}`,
+      height,
       judge: {
         name: judgeName,
         href: `${DOMAIN}${judgeHref}`,
@@ -124,7 +128,7 @@ const extractCompetitionInfoForEvent = async (
   const filteredCompetitionData = competitionData.filter(
     (x) => x.standardCompletionTime !== null && x.numYards !== null,
   );
-  const { results, errors } = await PromisePool.withConcurrency(10).for(
+  const { results, errors } = await PromisePool.withConcurrency(PARALLEL_FACTOR).for(
     filteredCompetitionData,
   ).process(async (competition) => {
     const detailsPageUrl = competition!.classHref;
@@ -151,16 +155,17 @@ const extractCompetitionInfoForEvent = async (
       const parentRow = detailsFontTag.parentElement!.parentElement!;
       const [_a, _b, _c, placeCell, dogCell, pointsCell] = parentRow.children;
       const place = placeCell.innerText.replace(/\s+/g, " ").trim();
-      const { dogBreed, dogHandler, dogName, dogId } = extractDogInfo(
-        dogCell,
-      );
+      const { dogBreed, dogHandler, registeredName, akcRegistrationNumber } =
+        extractDogInfo(
+          dogCell,
+        );
       const { points, time } = extractPointsInfo(pointsCell);
       detailsData.push({
         place,
         dogBreed,
         dogHandler,
-        dogName,
-        dogId,
+        registeredName,
+        akcRegistrationNumber,
         points,
         time,
       });
@@ -247,7 +252,7 @@ const main = async () => {
       `Going to extract data for ${extractedFilteredEvents.length} events.`,
     );
     await initParser();
-    const { errors } = await PromisePool.withConcurrency(10).for(
+    const { errors } = await PromisePool.withConcurrency(PARALLEL_FACTOR).for(
       extractedFilteredEvents,
     ).process(extractCompetitionInfoForEvent);
     for (const error of errors) {

@@ -15,12 +15,12 @@ const extractDogInfo = (dogCell: Element) => {
   const dogHandler = dogCellTextContent
     .slice(dogCellTextContent.indexOf(dogBreed) + dogBreed?.length)
     .trim(); // The handler information immediately follows the dog's breed, so just slice the string from the end of the dog breed substring.
-  const dogName = dogLink?.innerText.replace(/\s+/g, " ").trim()!;
+  const registeredName = dogLink?.innerText.replace(/\s+/g, " ").trim()!;
   // The ID of the dog is buried in the href of the dog link, so parse the URL and extract the query parameter matching the ID.
-  const dogId = new URL(
+  const akcRegistrationNumber = new URL(
     `https://www.apps.akc.org${dogLink?.getAttribute("href")}`,
   ).searchParams.get("dog_id")!;
-  return { dogHandler, dogName, dogBreed, dogId };
+  return { dogHandler, registeredName, dogBreed, akcRegistrationNumber };
 };
 
 /**

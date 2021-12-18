@@ -1,4 +1,55 @@
 import { Element } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
+
+export const parseAgRunName = (runName: string) => {
+  const agRegex =
+    /^Ag\s*(?<className>FAST|JWW|Colors)?\s*(?<division>[^\(]+)\((?<height>\d+)/g;
+  runName = runName.replace(/\s+/g, " ").trim();
+  const runMatches = agRegex.exec(runName);
+  const groups = runMatches?.groups!;
+  if (!groups) {
+    console.error(
+      `Got a runName that started with Ag, but no groups were matched: ${runName}`,
+    );
+    return;
+  }
+  let className = "Standard";
+  if (groups.className) {
+    className = groups.className;
+  }
+  const division = groups.division ? groups.division.trim() : null;
+  const height = groups.height;
+  return {
+    division,
+    height: parseInt(height),
+    className,
+  };
+};
+
+const parseT2BRunName = (runName: string) => {
+  const t2bRegex = /(?<t2b>Time 2 Beat)(?<division>[^\(]+)\((?<height>\d+)/g;
+  const runMatches = t2bRegex.exec(runName);
+  const className = "T2B"; // We know that this is right because we're in this function.
+  if (!runMatches) {
+    console.error(
+      `Got a runName that started with Ag, but wouldn't match regex: ${runName}`,
+    );
+    return;
+  }
+  const groups = runMatches.groups;
+  if (!groups) {
+    console.error(
+      `Got a runName that started with Ag, but no groups were matched: ${runName}`,
+    );
+    return;
+  }
+  const division = groups.division;
+  const height = groups.height;
+  return {
+    division: division.trim(),
+    height: parseInt(height),
+    className,
+  };
+};
 /**
  * Parses a competition class cell.
  * @param classCell The <td> tag containing a competition class anchor.
@@ -10,13 +61,45 @@ const extractClassInfo = (classCell: Element) => {
     console.error("Could not find a class link. Cannot extract class info.");
     return;
   }
-  const className = classLink.innerText;
   // The AKC page uses some kind of framework for opening links with JavaScript, but since we're interacting with HTML,
   // let's just parse out the path from the JavaScript code in the "href" attribute of the class link.
   const classHref =
     /openWin\('(?<href>[^']+)/g.exec(classLink.getAttribute("href")!)!
       .groups!.href;
-  return { className, classHref };
+  const runName = classLink.innerText;
+  try {
+    let result: {
+      className: string | null;
+      height: number | null;
+      division: string | null;
+    } | undefined;
+    if (runName.startsWith("Ag")) {
+      result = parseAgRunName(runName);
+    } else if (runName.startsWith("Time 2 Beat")) {
+      result = parseT2BRunName(runName);
+    } else {
+      console.error(
+        `Encountered unknown run name: ${runName}. HREF = ${classHref}`,
+      );
+      return;
+    }
+    if (!result) {
+      console.error(`Got an empty result after parsing. HREF = ${classHref}`);
+      return;
+    }
+    const { className, division, height } = result;
+
+    return {
+      runName,
+      className,
+      division,
+      classHref,
+      height,
+    };
+  } catch (e) {
+    console.error(`Error parsing ${runName}!`);
+    console.error(e);
+  }
 };
 
 /**
