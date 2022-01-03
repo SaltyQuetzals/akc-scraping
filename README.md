@@ -27,6 +27,9 @@ purposes only.
    1. This will compile the source code with permission to:
       1. access the internet
       1. write files to the local device
-      1. access environment variables
-   1. Once compiled, the executable will be named `scraper`. Just execute
-      `./scraper` to run the system.
+      1. access environment variables(
+1. Set the environment variable `MONGODB_URI` to the address of your MongoDB
+   instance (e.g. `"mongodb://localhost:27017"`). Without this step, the scraper
+   cannot connect to the database.
+1. Once compiled, the executable will be named `scraper`. Just execute
+   `./scraper` to run the system.
