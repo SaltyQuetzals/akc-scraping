@@ -36,3 +36,9 @@ jobs:
 
       - name: Build executable
         run: deno compile --allow-net --allow-write --allow-env -o scraper src/main.ts
+
+      - name: Upload executable as artifact
+        uses: actions/upload-artifacts@v2
+        with:
+          name: scraper
+          path: scraper
