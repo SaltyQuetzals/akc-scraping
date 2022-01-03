@@ -134,15 +134,21 @@ const extractCompetitionInfoForEvent = async (
     `${DOMAIN}/apps/events/search/index_results.cfm?action=plan&event_number=${eventAndClubInfo.eventNumber}&get_event_by_number=yes&NEW_END_DATE1=`;
   console.log(url);
   const html = await fetch(url).then((response) => response.text());
+
+  // Write the text file locally, for debugging purposes.
   await Deno.writeTextFile(
     `outputs/${eventAndClubInfo.eventNumber}.html`,
     html,
   );
+
+  // Parse the text we got back from the server, and if it isn't valid HTML, move on.
   const document = new DOMParser().parseFromString(html, "text/html");
   if (!document) {
     console.log(`Cannot parse html for ${url}.`);
     return;
   }
+
+  // Find all of the table rows that are actually a competition, or end early if we can't find any.
   const competitionRows = document.querySelectorAll(
     "html body table tbody tr td div font table tbody tr",
   );
@@ -150,10 +156,12 @@ const extractCompetitionInfoForEvent = async (
     console.log(`Could not find competition rows for ${url}`);
     return;
   }
+  // Filter out any rows that don't belong to competition trials.
   const filteredRows = Array.from(competitionRows).filter(isTrialRow);
   console.log(
     `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows.`,
   );
+  
   const competitionData = filteredRows.map((row) => {
     const [_, eventCell, judgeCell, entriesCell] = Array.from(
       (row as Element).children,
@@ -162,12 +170,12 @@ const extractCompetitionInfoForEvent = async (
     const judgeInfo = extractJudgeInfo(judgeCell);
     const classInfo = extractClassInfo(eventCell);
     if (!entriesInfo || !judgeInfo || !classInfo) {
-      // We're only interested in competitions where there were entries.
+      // We're only interested in competitions where all the cells are valid
+      // (i.e. there was a judge, there were entries, and there was class information)
       return;
     }
     const { judgeName, judgeHref } = judgeInfo;
     const { runName, className, division, classHref, height } = classInfo;
-    const { numEntries, standardCompletionTime, numYards } = entriesInfo;
     const competitionEntry: CompetitionEntry = {
       runName,
       className,
@@ -178,9 +186,7 @@ const extractCompetitionInfoForEvent = async (
         name: judgeName,
         href: `${DOMAIN}${judgeHref}`,
       },
-      numEntries,
-      standardCompletionTime,
-      numYards,
+      ...entriesInfo
     };
     return competitionEntry;
   }).filter((entry): entry is CompetitionEntry =>

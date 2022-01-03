@@ -54,7 +54,19 @@ const parseT2BRunName = (runName: string) => {
   };
 };
 /**
- * Parses a competition class cell.
+ * Parses a competition class cell. Class cells look something like this:
+ * <td colspan="4" valign="top">
+		<font size="-1" face="sans-serif, Arial, helvetica">
+			<div align="center">
+				<strong>
+					<a name="4"></a>
+					<a class="white" href="JavaScript: event_info = openWin('/apps/events/search/index_results.cfm?action=event_info&amp;comp_type=AG&amp;status=RSLT&amp;int_ref=4&amp;event_number=2020526309&amp;cde_comp_group=AG&amp;cde_comp_type=AG&amp;NEW_END_DATE1=&amp;key_stkhldr_event=133131731&amp;mixed_breed=N', 'eventinfo', 'width=800,height=600,toolbar=1,location=0,directories=0,status=0,menuBar=0,scrollBars=1,resizable=1' ); event_info.focus()">
+						<strong>Ag Novice A (24 INCHES)</strong>
+					</a>
+				</strong>
+			</div>
+		</font>
+	</td>
  * @param classCell The <td> tag containing a competition class anchor.
  * @returns The name of the competition class, and a path to its placement data.
  */
@@ -106,7 +118,12 @@ const extractClassInfo = (classCell: Element) => {
 };
 
 /**
- * Parses a judge cell.
+ * Parses a judge cell, returning the name of the judge and a link to the judge's profile. Judge cells look like:
+ * 	<td valign="top">
+      <font size="-1" face="sans-serif, Arial, helvetica">
+        <a class="white" href="/apps/judges_directory/index.cfm?action=refresh_index_init&amp;judge_id=90966"> M  Fletcher </a>
+      </font>
+	  </td>
  * @param judgeCell The <td> tag containing a judge anchor.
  * @returns The name of the judge, as well as a path to the judge's information.
  */
@@ -122,7 +139,11 @@ const extractJudgeInfo = (judgeCell: Element) => {
 };
 
 /**
- * Parses an entries cell.
+ * Parses an entries cell, returning the number of entries, the standard completion time (if listed), and the number of yards (if listed)
+ * Entries cells look like:
+ *  <td colspan="2" valign="top">
+		  <font size="-1" face="sans-serif, Arial, helvetica">(1ent)</font>
+	  </td>
  * @param entriesCell The <td> containing info about the number of entries in a competition
  * @returns The number of entries, the standard completion time (SCT), and the distance of the course.
  */
@@ -134,7 +155,7 @@ const extractEntriesInfo = (entriesCell: Element) => {
   }
   // Matches:
   // (2ent) -> {entries: 2}
-  // (14 ent) 30 Secs -> {entries: 14, seconds: 30, yards: }
+  // (14 ent) 30 Secs -> {entries: 14, seconds: 30, yards: null}
   // (13 ent) 20.5 Secs 100 yds -> {entries: 13, seconds: 20.5, yards: 100}
   // The regex ignores the whitespace in between each token, and will match only the parts that are present.
   const entriesAndSecondsAndYardsRegex =
@@ -160,7 +181,7 @@ const extractEntriesInfo = (entriesCell: Element) => {
 
 /**
  * Determines whether an AKC event page table row contains agility trial data.
- * @param row An AKC event page table row
+ * @param row An AKC event page table row.
  * @returns Whether or not this row contains agility trial data.
  */
 const isTrialRow = (row: Node) => {
