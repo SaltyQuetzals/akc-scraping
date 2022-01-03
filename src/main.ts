@@ -161,7 +161,7 @@ const extractCompetitionInfoForEvent = async (
   console.log(
     `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows.`,
   );
-  
+
   const competitionData = filteredRows.map((row) => {
     const [_, eventCell, judgeCell, entriesCell] = Array.from(
       (row as Element).children,
@@ -186,7 +186,7 @@ const extractCompetitionInfoForEvent = async (
         name: judgeName,
         href: `${DOMAIN}${judgeHref}`,
       },
-      ...entriesInfo
+      ...entriesInfo,
     };
     return competitionEntry;
   }).filter((entry): entry is CompetitionEntry =>
