@@ -207,7 +207,7 @@ const extractCompetitionInfoForEvent = async (
       const matchingDog = await dogs.findOne({
         AKCnum: place.akcRegistrationNumber,
       });
-      let dogId: Bson.ObjectID;
+      let dogId: Bson.ObjectId;
       if (!matchingDog) {
         console.log(
           `Could not find a dog with AKC registration number: ${place.akcRegistrationNumber}`,

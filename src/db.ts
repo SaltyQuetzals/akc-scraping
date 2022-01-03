@@ -10,7 +10,7 @@ export const dogs = db.collection<Dog>("dogs");
 export const runs = db.collection<Run>("runs");
 
 export interface Dog {
-  _id: Bson.ObjectID;
+  _id: Bson.ObjectId;
   CallName?: string;
   Name: string;
   Breed?: string | null;
@@ -18,7 +18,7 @@ export interface Dog {
   Sex?: string | null;
   Height?: string | null;
   Weight?: string | null;
-  createdBy?: Bson.ObjectID;
+  createdBy?: Bson.ObjectId;
   CurrYr_Mach?: string | null;
   PrevYr_Mach?: string | null;
   Lifetime_Mach?: string | null;
@@ -107,8 +107,8 @@ export interface Dog {
   OtherRegistrations?: string | null;
 }
 export interface Run {
-  _id: Bson.ObjectID;
-  Dog: Bson.ObjectID;
+  _id: Bson.ObjectId;
+  Dog: Bson.ObjectId;
   CurrentDate: Date | string;
   Org?: string | null;
   Division?: string | null;
@@ -124,7 +124,7 @@ export interface Run {
   Dog3YPS?: number | null;
   DogCallName?: string;
   TimeZone?: string;
-  createdBy?: Bson.ObjectID;
+  createdBy?: Bson.ObjectId;
   Date_As_String?: string;
   Surface?: (string | null)[] | null;
   Weather?: string | null;
