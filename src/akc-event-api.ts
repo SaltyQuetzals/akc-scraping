@@ -113,6 +113,6 @@ const extractEventInfo = (eventInfo: Event) => {
   } = eventInfo;
   const startDate = new Date(startDateString);
   const endDate = new Date(endDateString);
-  return {eventNumber, eventName, clubName, startDate, endDate};
+  return { eventNumber, eventName, clubName, startDate, endDate };
 };
-export {extractEventInfo};
+export { extractEventInfo };

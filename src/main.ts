@@ -6,7 +6,10 @@ import {
   extractClassInfo,
   extractEntriesInfo,
   extractJudgeInfo,
+  isTrialRow,
 } from "./event-page.ts";
+
+import { dogs, runs } from "./db.ts";
 
 import { extractDogInfo, extractPointsInfo } from "./placement-page.ts";
 
@@ -16,13 +19,29 @@ import {
   initParser,
 } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
 import { PromisePool } from "https://cdn.skypack.dev/@supercharge/promise-pool?dts";
+import { Bson } from "https://deno.land/x/mongo/mod.ts";
 
 const START_YEAR = 2021;
 const START_MONTH = 0; // January
 const START_DAY = 1;
 const START_DATE = new Date(START_YEAR, START_MONTH, START_DAY);
 const DOMAIN = "https://www.apps.akc.org";
-const PARALLEL_FACTOR = 10;
+const CONCURRENCY = 10;
+
+interface CompetitionEntry {
+  runName: string;
+  className: string | null;
+  division: string | null;
+  classHref: string;
+  height: number | null;
+  judge: {
+    name: string;
+    href: string;
+  };
+  numEntries: number;
+  standardCompletionTime: number | null;
+  numYards: number | null;
+}
 
 /**
  * Constructs an array of intervals starting at the given start date and ending at the given end date.
@@ -51,6 +70,55 @@ const monthlyIntervals = (
     startDate = endDate;
   }
   return dates;
+};
+
+/**
+ * Adds placement information to a competition entry: which dogs won, their scores, breeds, handlers, names, IDs
+ * @param entry A competition entry
+ * @returns The competition entry with additional data about how dogs placed in the competition
+ */
+const addPlacementDetails = async (entry: CompetitionEntry) => {
+  const detailsPageUrl = entry.classHref;
+  const detailsPageHtml = await fetch(detailsPageUrl).then((response) =>
+    response.text()
+  );
+  const document = new DOMParser().parseFromString(
+    detailsPageHtml,
+    "text/html",
+  );
+  if (!document) {
+    console.error(`Could not read HTML response of ${detailsPageUrl}`);
+    return;
+  }
+  const fontTags = document.querySelectorAll(
+    'td[align="right"] > font',
+  );
+  if (!fontTags) {
+    console.error(`Could not find font tags on ${detailsPageUrl}`);
+    return;
+  }
+  const detailsData = Array.from(fontTags).map((fontTag) => {
+    const parentRow = fontTag.parentElement!.parentElement!;
+    const [_a, _b, _c, placeCell, dogCell, pointsCell] = parentRow.children;
+    const { dogBreed, dogHandler, registeredName, akcRegistrationNumber } =
+      extractDogInfo(
+        dogCell,
+      );
+    const { points, time } = extractPointsInfo(pointsCell);
+    const placeStr = placeCell.innerText.replace(/\s+/g, " ").trim();
+    const place = placeStr.match(/\d+/g)?.[0] || null;
+    return {
+      place,
+      dogBreed,
+      dogHandler,
+      registeredName,
+      akcRegistrationNumber,
+      points,
+      time,
+    };
+  });
+  const finalEntry = { ...entry, placements: detailsData };
+  return finalEntry;
 };
 
 const extractCompetitionInfoForEvent = async (
@@ -82,20 +150,11 @@ const extractCompetitionInfoForEvent = async (
     console.log(`Could not find competition rows for ${url}`);
     return;
   }
-  const filteredRows = Array.from(competitionRows).filter((value) => {
-    const elem = value as Element;
-    if (elem.children.length !== 4) {
-      return false;
-    }
-    const firstChild = elem.children[1];
-    return firstChild.hasAttribute("colspan") &&
-      firstChild.getAttribute("colspan") === "4";
-  });
+  const filteredRows = Array.from(competitionRows).filter(isTrialRow);
   console.log(
     `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows.`,
   );
-  const competitionData = [];
-  for (const row of filteredRows) {
+  const competitionData = filteredRows.map((row) => {
     const [_, eventCell, judgeCell, entriesCell] = Array.from(
       (row as Element).children,
     );
@@ -109,7 +168,7 @@ const extractCompetitionInfoForEvent = async (
     const { judgeName, judgeHref } = judgeInfo;
     const { runName, className, division, classHref, height } = classInfo;
     const { numEntries, standardCompletionTime, numYards } = entriesInfo;
-    const competitionEntry = {
+    const competitionEntry: CompetitionEntry = {
       runName,
       className,
       division,
@@ -123,58 +182,55 @@ const extractCompetitionInfoForEvent = async (
       standardCompletionTime,
       numYards,
     };
-    competitionData.push(competitionEntry);
-  }
-  const filteredCompetitionData = competitionData.filter(
-    (x) => x.standardCompletionTime !== null && x.numYards !== null,
+    return competitionEntry;
+  }).filter((entry): entry is CompetitionEntry =>
+    !!entry && entry.standardCompletionTime !== null && entry.numYards !== null
   );
-  const { results, errors } = await PromisePool.withConcurrency(PARALLEL_FACTOR).for(
-    filteredCompetitionData,
-  ).process(async (competition) => {
-    const detailsPageUrl = competition!.classHref;
-    const detailsPageHtml = await fetch(detailsPageUrl).then((response) =>
-      response.text()
-    );
-    const document = new DOMParser().parseFromString(
-      detailsPageHtml,
-      "text/html",
-    );
-    if (!document) {
-      console.error(`Could not read HTML response of ${detailsPageUrl}`);
-      return;
-    }
-    const detailsFontTags = document.querySelectorAll(
-      'td[align="right"] > font',
-    );
-    if (!detailsFontTags) {
-      console.error(`Could not find Font tags on ${detailsPageUrl}`);
-      return;
-    }
-    const detailsData = [];
-    for (const detailsFontTag of detailsFontTags) {
-      const parentRow = detailsFontTag.parentElement!.parentElement!;
-      const [_a, _b, _c, placeCell, dogCell, pointsCell] = parentRow.children;
-      const place = placeCell.innerText.replace(/\s+/g, " ").trim();
-      const { dogBreed, dogHandler, registeredName, akcRegistrationNumber } =
-        extractDogInfo(
-          dogCell,
-        );
-      const { points, time } = extractPointsInfo(pointsCell);
-      detailsData.push({
-        place,
-        dogBreed,
-        dogHandler,
-        registeredName,
-        akcRegistrationNumber,
-        points,
-        time,
-      });
-    }
-    const finalEntry = { ...competition, placements: detailsData };
-    return finalEntry;
-  });
+  const { results, errors } = await PromisePool.withConcurrency(CONCURRENCY)
+    .for(
+      competitionData,
+    ).process(addPlacementDetails);
   for (const error of errors) {
-    console.error(`${url}: ${error.item}`);
+    console.error(`${url}: ${error.message}`);
+  }
+  for (const result of results) {
+    if (!result) {
+      continue;
+    }
+    for (const place of result.placements) {
+      const matchingDog = await dogs.findOne({
+        AKCnum: place.akcRegistrationNumber,
+      });
+      let dogId: Bson.ObjectID;
+      if (!matchingDog) {
+        console.log(
+          `Could not find a dog with AKC registration number: ${place.akcRegistrationNumber}`,
+        );
+        dogId = await dogs.insertOne({
+          Name: place.registeredName,
+          AKCnum: place.akcRegistrationNumber,
+        });
+      } else {
+        dogId = matchingDog._id;
+      }
+      const matchingRun = await runs.findOne({
+        Dog: dogId,
+        CurrentDate: eventAndClubInfo.startDate,
+      });
+      if (!matchingRun) {
+        await runs.insertOne({
+          Dog: dogId,
+          CurrentDate: eventAndClubInfo.startDate,
+          Division: result.division,
+          Class: result.className,
+          Height: result.height?.toString(),
+          Judge: result.judge.name,
+          Place: place.place ? parseInt(place.place) : null,
+          SCT: result.standardCompletionTime,
+          Yards: result.numYards,
+        });
+      }
+    }
   }
   return Deno.writeTextFile(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
@@ -252,7 +308,7 @@ const main = async () => {
       `Going to extract data for ${extractedFilteredEvents.length} events.`,
     );
     await initParser();
-    const { errors } = await PromisePool.withConcurrency(PARALLEL_FACTOR).for(
+    const { errors } = await PromisePool.withConcurrency(CONCURRENCY).for(
       extractedFilteredEvents,
     ).process(extractCompetitionInfoForEvent);
     for (const error of errors) {

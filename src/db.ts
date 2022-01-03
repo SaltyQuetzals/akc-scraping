@@ -3,20 +3,22 @@ import { Bson, MongoClient } from "https://deno.land/x/mongo/mod.ts";
 
 const client = new MongoClient();
 
-await client.connect("mongodb://localhost:27017");
+await client.connect(Deno.env.get("MONGODB_URI")!);
 
-const db = client.database("akc");
+const db = client.database("AgilityTracks");
+export const dogs = db.collection<Dog>("dogs");
+export const runs = db.collection<Run>("runs");
 
 export interface Dog {
   _id: Bson.ObjectID;
-  CallName: string;
+  CallName?: string;
   Name: string;
   Breed?: string | null;
   DOB?: Date;
   Sex?: string | null;
   Height?: string | null;
   Weight?: string | null;
-  createdBy: Bson.ObjectID;
+  createdBy?: Bson.ObjectID;
   CurrYr_Mach?: string | null;
   PrevYr_Mach?: string | null;
   Lifetime_Mach?: string | null;
@@ -106,7 +108,7 @@ export interface Dog {
 }
 export interface Run {
   _id: Bson.ObjectID;
-  Dog: string;
+  Dog: Bson.ObjectID;
   CurrentDate: Date | string;
   Org?: string | null;
   Division?: string | null;
@@ -117,13 +119,13 @@ export interface Run {
   Mach?: string | null;
   Pach?: string | null;
   T2B?: string | null;
-  Dog1YPS: number;
+  Dog1YPS?: number;
   Dog2YPS?: number | null;
   Dog3YPS?: number | null;
-  DogCallName: string;
-  TimeZone: string;
-  createdBy: Bson.ObjectID;
-  Date_As_String: string;
+  DogCallName?: string;
+  TimeZone?: string;
+  createdBy?: Bson.ObjectID;
+  Date_As_String?: string;
   Surface?: (string | null)[] | null;
   Weather?: string | null;
   Judge?: string | null;

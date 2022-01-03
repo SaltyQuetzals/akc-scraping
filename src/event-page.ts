@@ -1,4 +1,7 @@
-import { Element } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
+import {
+  Element,
+  Node,
+} from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
 
 export const parseAgRunName = (runName: string) => {
   const agRegex =
@@ -155,4 +158,19 @@ const extractEntriesInfo = (entriesCell: Element) => {
   return { numEntries, standardCompletionTime, numYards };
 };
 
-export { extractClassInfo, extractEntriesInfo, extractJudgeInfo };
+/**
+ * Determines whether an AKC event page table row contains agility trial data.
+ * @param row An AKC event page table row
+ * @returns Whether or not this row contains agility trial data.
+ */
+const isTrialRow = (row: Node) => {
+  const elem = row as Element;
+  if (elem.children.length !== 4) {
+    return false;
+  }
+  const firstChild = elem.children[1];
+  return firstChild.hasAttribute("colspan") &&
+    firstChild.getAttribute("colspan") === "4";
+};
+
+export { extractClassInfo, extractEntriesInfo, extractJudgeInfo, isTrialRow };
