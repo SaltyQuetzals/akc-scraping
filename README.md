@@ -4,7 +4,7 @@ This repository is intended to scrape agility training competition data from the
 [American Kennel Club](akc.org) website, and store that data in a
 [MongoDB](https://www.mongodb.com/) database.
 
-The repository is written in TypeScript, and runs on [Deno](https://deno.land/),
+The repository is written in [TypeScript](https://www.typescriptlang.org/), and runs on [Deno](https://deno.land/),
 a modern runtime for JavaScript/TypeScript with an emphasis on security. The
 source code compiles to a single, self-contained, executable file.
 
