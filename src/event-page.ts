@@ -2,6 +2,7 @@ import {
   Element,
   Node,
 } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
+import { logger } from "./logging.ts";
 
 export const parseAgRunName = (runName: string) => {
   const agRegex =
@@ -164,6 +165,7 @@ const extractEntriesInfo = (entriesCell: Element) => {
 
   // If we didn't match the entries data at all, or there aren't any match groups, return nothing.
   if (!matches || !matches.groups) {
+    logger.debug(`Could not find a match with entries regex: ${entriesData}`)
     return;
   }
 

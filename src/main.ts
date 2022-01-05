@@ -20,13 +20,15 @@ import {
 } from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
 import { PromisePool } from "https://cdn.skypack.dev/@supercharge/promise-pool?dts";
 import { Bson } from "https://deno.land/x/mongo/mod.ts";
+import { logger } from "./logging.ts";
 
 const START_YEAR = 2021;
 const START_MONTH = 0; // January
 const START_DAY = 1;
 const START_DATE = new Date(START_YEAR, START_MONTH, START_DAY);
 const DOMAIN = "https://www.apps.akc.org";
-const CONCURRENCY = 10;
+const EVENT_CONCURRENCY = 10;
+const PLACEMENT_CONCURRENCY = 10;
 
 interface CompetitionEntry {
   runName: string;
@@ -87,14 +89,14 @@ const addPlacementDetails = async (entry: CompetitionEntry) => {
     "text/html",
   );
   if (!document) {
-    console.error(`Could not read HTML response of ${detailsPageUrl}`);
+    logger.warning(`Could not read HTML response of ${detailsPageUrl}`);
     return;
   }
   const fontTags = document.querySelectorAll(
     'td[align="right"] > font',
   );
   if (!fontTags) {
-    console.error(`Could not find font tags on ${detailsPageUrl}`);
+    logger.warning(`Could not find font tags on ${detailsPageUrl}`);
     return;
   }
   const detailsData = Array.from(fontTags).map((fontTag) => {
@@ -132,7 +134,7 @@ const extractCompetitionInfoForEvent = async (
 ) => {
   const url =
     `${DOMAIN}/apps/events/search/index_results.cfm?action=plan&event_number=${eventAndClubInfo.eventNumber}&get_event_by_number=yes&NEW_END_DATE1=`;
-  console.log(url);
+  logger.debug("Fetching HTML", url);
   const html = await fetch(url).then((response) => response.text());
 
   // Write the text file locally, for debugging purposes.
@@ -144,7 +146,7 @@ const extractCompetitionInfoForEvent = async (
   // Parse the text we got back from the server, and if it isn't valid HTML, move on.
   const document = new DOMParser().parseFromString(html, "text/html");
   if (!document) {
-    console.log(`Cannot parse html for ${url}.`);
+    logger.warning(`Cannot parse HTML, skipping.`, url);
     return;
   }
 
@@ -153,13 +155,14 @@ const extractCompetitionInfoForEvent = async (
     "html body table tbody tr td div font table tbody tr",
   );
   if (!competitionRows) {
-    console.log(`Could not find competition rows for ${url}`);
+    logger.warning(`Could not find competition rows`, url);
     return;
   }
   // Filter out any rows that don't belong to competition trials.
   const filteredRows = Array.from(competitionRows).filter(isTrialRow);
-  console.log(
-    `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows.`,
+  logger.debug(
+    `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows`,
+    url,
   );
 
   const competitionData = filteredRows.map((row) => {
@@ -172,6 +175,13 @@ const extractCompetitionInfoForEvent = async (
     if (!entriesInfo || !judgeInfo || !classInfo) {
       // We're only interested in competitions where all the cells are valid
       // (i.e. there was a judge, there were entries, and there was class information)
+      logger.debug(
+        `A row was missing required information, skipping`,
+        url,
+        JSON.stringify(classInfo),
+        JSON.stringify(judgeInfo),
+        JSON.stringify(entriesInfo),
+      );
       return;
     }
     const { judgeName, judgeHref } = judgeInfo;
@@ -192,12 +202,19 @@ const extractCompetitionInfoForEvent = async (
   }).filter((entry): entry is CompetitionEntry =>
     !!entry && entry.standardCompletionTime !== null && entry.numYards !== null
   );
-  const { results, errors } = await PromisePool.withConcurrency(CONCURRENCY)
+  logger.info(
+    `Successfully got data for ${competitionData.length} competitions`,
+    url,
+  );
+  const { results, errors } = await PromisePool.withConcurrency(
+    PLACEMENT_CONCURRENCY,
+  )
     .for(
       competitionData,
     ).process(addPlacementDetails);
+  logger.info("Finished adding placement details to the competitions", url);
   for (const error of errors) {
-    console.error(`${url}: ${error.message}`);
+    logger.error(error.message, url);
   }
   for (const result of results) {
     if (!result) {
@@ -209,8 +226,10 @@ const extractCompetitionInfoForEvent = async (
       });
       let dogId: Bson.ObjectId;
       if (!matchingDog) {
-        console.log(
-          `Could not find a dog with AKC registration number: ${place.akcRegistrationNumber}`,
+        logger.debug(
+          "Could not find a dog with AKC registration number",
+          place.akcRegistrationNumber,
+          result.classHref,
         );
         dogId = await dogs.insertOne({
           Name: place.registeredName,
@@ -219,22 +238,25 @@ const extractCompetitionInfoForEvent = async (
       } else {
         dogId = matchingDog._id;
       }
-      const matchingRun = await runs.findOne({
+      const runCriteria = {
         Dog: dogId,
         CurrentDate: eventAndClubInfo.startDate,
-      });
+        Division: result.division,
+        Class: result.className,
+        Height: result.height?.toString(),
+        Judge: result.judge.name,
+        Place: place.place ? parseInt(place.place) : null,
+        SCT: result.standardCompletionTime,
+        Yards: result.numYards,
+      };
+      const matchingRun = await runs.findOne(runCriteria);
       if (!matchingRun) {
-        await runs.insertOne({
-          Dog: dogId,
-          CurrentDate: eventAndClubInfo.startDate,
-          Division: result.division,
-          Class: result.className,
-          Height: result.height?.toString(),
-          Judge: result.judge.name,
-          Place: place.place ? parseInt(place.place) : null,
-          SCT: result.standardCompletionTime,
-          Yards: result.numYards,
-        });
+        logger.debug(
+          "Could not find a run matching run criteria, inserting",
+          result.classHref,
+          JSON.stringify(runCriteria),
+        );
+        await runs.insertOne(runCriteria);
       }
     }
   }
@@ -246,6 +268,8 @@ const extractCompetitionInfoForEvent = async (
 
 const main = async () => {
   const today = new Date();
+  logger.debug("Initializing HTML parser...");
+  await initParser();
   for (const [start, end] of monthlyIntervals(START_DATE, today)) {
     const results = await fetch(
       "https://webapps.akc.org/event-search/api/search/events",
@@ -304,17 +328,13 @@ const main = async () => {
         "mode": "cors",
       },
     ).then((response) => response.json());
-    console.log(
-      `Received a total of ${results.events.length} events between ${start} and ${end}.`,
-    );
     const extractedFilteredEvents = (results.events as Event[]).map(
       extractGeneralEventInfo,
     ).filter((event) => event.endDate < today);
-    console.log(
-      `Going to extract data for ${extractedFilteredEvents.length} events.`,
+    logger.info(
+      `Scraping ${extractedFilteredEvents.length} events between ${start} and ${end}.`,
     );
-    await initParser();
-    const { errors } = await PromisePool.withConcurrency(CONCURRENCY).for(
+    const { errors } = await PromisePool.withConcurrency(EVENT_CONCURRENCY).for(
       extractedFilteredEvents,
     ).process(extractCompetitionInfoForEvent);
     for (const error of errors) {

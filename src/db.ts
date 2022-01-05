@@ -1,13 +1,36 @@
 // deno-lint-ignore-file camelcase
 import { Bson, MongoClient } from "https://deno.land/x/mongo/mod.ts";
+import { logger } from "./logging.ts";
+
+const DATABASE_NAME = "AgilityTracks";
+const DOG_COLLECTION_NAME = "dogs";
+const RUN_COLLECTION_NAME = "runs";
 
 const client = new MongoClient();
 
-await client.connect(Deno.env.get("MONGODB_URI")!);
+const mongoUri = Deno.env.get("MONGODB_URI");
 
-const db = client.database("AgilityTracks");
-export const dogs = db.collection<Dog>("dogs");
-export const runs = db.collection<Run>("runs");
+if (!mongoUri) {
+  throw Error("The environment variable MONGODB_URI must be set.");
+}
+logger.info(`Connecting to MongoDB instance at: ${mongoUri}`);
+await client.connect(mongoUri);
+
+logger.info(`Attempting to access ${DATABASE_NAME}`);
+const db = client.database(DATABASE_NAME);
+logger.info(
+  `Loading collections ${DOG_COLLECTION_NAME} and ${RUN_COLLECTION_NAME}`,
+);
+logger.info(
+  `Found ${await db.collection<Dog>(DOG_COLLECTION_NAME)
+    .countDocuments()} documents in ${DOG_COLLECTION_NAME}`,
+);
+logger.info(
+  `Found ${await db.collection<Run>(RUN_COLLECTION_NAME)
+    .countDocuments()} documents in ${RUN_COLLECTION_NAME}`,
+);
+export const dogs = db.collection<Dog>(DOG_COLLECTION_NAME);
+export const runs = db.collection<Run>(RUN_COLLECTION_NAME);
 
 export interface Dog {
   _id: Bson.ObjectId;
