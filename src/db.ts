@@ -1,137 +1,21 @@
 // deno-lint-ignore-file camelcase
-import { Bson, MongoClient } from "https://deno.land/x/mongo/mod.ts";
-import { logger } from "./logging.ts";
-
-const DATABASE_NAME = "AgilityTracks";
-const DOG_COLLECTION_NAME = "dogs";
-const RUN_COLLECTION_NAME = "runs";
-
-const client = new MongoClient();
-
-const mongoUri = Deno.env.get("MONGODB_URI");
-
-if (!mongoUri) {
-  throw Error("The environment variable MONGODB_URI must be set.");
-}
-logger.info(`Connecting to MongoDB instance at: ${mongoUri}`);
-await client.connect(mongoUri);
-
-logger.info(`Attempting to access ${DATABASE_NAME}`);
-const db = client.database(DATABASE_NAME);
-logger.info(
-  `Loading collections ${DOG_COLLECTION_NAME} and ${RUN_COLLECTION_NAME}`,
-);
-logger.info(
-  `Found ${await db.collection<Dog>(DOG_COLLECTION_NAME)
-    .countDocuments()} documents in ${DOG_COLLECTION_NAME}`,
-);
-logger.info(
-  `Found ${await db.collection<Run>(RUN_COLLECTION_NAME)
-    .countDocuments()} documents in ${RUN_COLLECTION_NAME}`,
-);
-export const dogs = db.collection<Dog>(DOG_COLLECTION_NAME);
-export const runs = db.collection<Run>(RUN_COLLECTION_NAME);
+import { connect, model, Schema, Types } from "mongoose";
+import { logger } from "./logging";
 
 export interface Dog {
-  _id: Bson.ObjectId;
-  CallName?: string;
+  // _id: Types.ObjectId;
   Name: string;
-  Breed?: string | null;
-  DOB?: Date;
-  Sex?: string | null;
-  Height?: string | null;
-  Weight?: string | null;
-  createdBy?: Bson.ObjectId;
-  CurrYr_Mach?: string | null;
-  PrevYr_Mach?: string | null;
-  Lifetime_Mach?: string | null;
-  CurrYr_HighMachStd?: string | null;
-  PrevYr_HighMachStd?: string | null;
-  Lifetime_HighMachStd?: string | null;
-  CurrYr_HighMachJWW?: string | null;
-  PrevYr_HighMachJWW?: string | null;
-  Lifetime_HighMachJWW?: string | null;
-  CurrYr_QQ?: string | null;
-  PrevYr_QQ?: string | null;
-  Lifetime_QQ?: string | null;
-  CurrYr_Pach?: string | null;
-  PrevYr_Pach?: string | null;
-  Lifetime_Pach?: string | null;
-  CurrYr_HighPachStd?: string | null;
-  PrevYr_HighPachStd?: string | null;
-  Lifetime_HighPachStd?: string | null;
-  CurrYr_HighPachJWW?: string | null;
-  PrevYr_HighPachJWW?: string | null;
-  Lifetime_HighPachJWW?: string | null;
-  CurrYr_PQQ?: string | null;
-  PrevYr_PQQ?: string | null;
-  Lifetime_PQQ?: string | null;
-  CurrYr_AvgYPSStd?: string | null;
-  PrevYr_AvgYPSStd?: string | null;
-  Lifetime_AvgYPSStd?: string | null;
-  CurrYr_AvgYPSJWW?: string | null;
-  PrevYr_AvgYPSJWW?: string | null;
-  Lifetime_AvgYPSJWW?: string | null;
-  CurrYr_HighYPSStd?: string | null;
-  PrevYr_HighYPSStd?: string | null;
-  Lifetime_HighYPSStd?: string | null;
-  CurrYr_HighYPSJWW?: string | null;
-  PrevYr_HighYPSJWW?: string | null;
-  Lifetime_HighYPSJWW?: string | null;
-  curr_nat_QQs?: string | null;
-  curr_nat_Qs?: string | null;
-  curr_nat_Pts?: string | null;
-  InvPtTotal?: string | null;
-  ypsstd_with_min?: string | null;
-  ypsjww_with_min?: string | null;
-  curr_world_QQs?: string | null;
-  USDAACurrYr_AvgYPSStd?: string | null;
-  USDAAPrevYr_AvgYPSStd?: string | null;
-  USDAALifetime_AvgYPSStd?: string | null;
-  USDAACurrYr_AvgYPSJWW?: string | null;
-  USDAAPrevYr_AvgYPSJWW?: string | null;
-  USDAALifetime_AvgYPSJWW?: string | null;
-  USDAACurrYr_HighYPSStd?: string | null;
-  USDAAPrevYr_HighYPSStd?: string | null;
-  USDAALifetime_HighYPSStd?: string | null;
-  USDAACurrYr_HighYPSJWW?: string | null;
-  USDAAPrevYr_HighYPSJWW?: string | null;
-  USDAALifetime_HighYPSJWW?: string | null;
-  curr_nat_GPQs?: string | null;
-  curr_nat_StplQs?: string | null;
-  curr_nat_TeamQs?: string | null;
-  Last_Run_Update?: string | null;
-  Titles?: (string | null)[] | null;
   AKCnum?: string | null;
-  USDAAnum?: string | null;
-  StartMach?: string | null;
-  StartQQ?: string | null;
-  StartPach?: string | null;
-  StartPQQ?: string | null;
-  StartT2B?: string | null;
-  ChipNum?: string | null;
-  VetName?: string | null;
-  VetNum?: string | null;
-  Sire?: string | null;
-  SireNote?: string | null;
-  Dam?: string | null;
-  DamNote?: string | null;
-  Breeder?: string | null;
-  UnmappedData?: (string)[] | null;
-  Picture_Email?: string | null;
-  Picture_URL?: string | null;
-  Picture_Name?: string | null;
-  curr_nat_Prem_QQs?: string | null;
-  curr_nat_Prem_Pts?: string | null;
-  InvPPtTotal?: string | null;
-  TattooNum?: string | null;
-  Instructor?: string | null;
-  UKInum?: string | null;
-  OtherRegistrations?: string | null;
 }
+
+const dogSchema = new Schema<Dog>({
+  Name: { type: String, required: true },
+  AKCnum: { type: String, required: false },
+});
+
 export interface Run {
-  _id: Bson.ObjectId;
-  Dog: Bson.ObjectId;
+  _id: Types.ObjectId;
+  Dog: Types.ObjectId;
   CurrentDate: Date | string;
   Org?: string | null;
   Division?: string | null;
@@ -147,7 +31,7 @@ export interface Run {
   Dog3YPS?: number | null;
   DogCallName?: string;
   TimeZone?: string;
-  createdBy?: Bson.ObjectId;
+  createdBy?: Types.ObjectId;
   Date_As_String?: string;
   Surface?: (string | null)[] | null;
   Weather?: string | null;
@@ -189,3 +73,35 @@ export interface Run {
   MishapNotes?: string | null;
   Notes?: string | null;
 }
+
+const runSchema = new Schema<Run>({
+  Dog: Schema.Types.ObjectId,
+  CurrentDate: {
+    type: Date,
+    required: true,
+  },
+  Division: {
+    type: String,
+    required: false,
+  },
+  Class: { type: String, required: false },
+  Height: { type: String, required: false },
+  Judge: { type: String, required: false },
+  Place: { type: Number, required: false },
+  SCT: { type: Number, required: false },
+  Yards: { type: Number, required: false },
+});
+
+const mongoUri = process.env["MONGODB_URI"];
+if (!mongoUri) {
+  throw new Error("The MONGODB_URI environment variable must be set.");
+}
+
+export const connectToDb = async () => {
+  logger.info("Connecting to MongoDB...");
+  await connect(mongoUri);
+  logger.info("Connected successfully.");
+};
+
+export const DogModel = model<Dog>("Dog", dogSchema);
+export const RunModel = model<Run>("Run", runSchema);
