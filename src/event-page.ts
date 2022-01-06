@@ -1,8 +1,4 @@
-import {
-  Element,
-  Node,
-} from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
-import { logger } from "./logging.ts";
+import { logger } from "./logging";
 
 export const parseAgRunName = (runName: string) => {
   const agRegex =
@@ -82,7 +78,7 @@ const extractClassInfo = (classCell: Element) => {
   const classHref =
     /openWin\('(?<href>[^']+)/g.exec(classLink.getAttribute("href")!)!
       .groups!.href;
-  const runName = classLink.innerText;
+  const runName = classLink.textContent!;
   try {
     let result: {
       className: string | null;
@@ -115,6 +111,7 @@ const extractClassInfo = (classCell: Element) => {
   } catch (e) {
     console.error(`Error parsing ${runName}!`);
     console.error(e);
+    return;
   }
 };
 
@@ -134,7 +131,7 @@ const extractJudgeInfo = (judgeCell: Element) => {
     console.error("Could not find a judge link.");
     return;
   }
-  const judgeName = judgeCell.innerText.replace(/\s+/g, " ").trim();
+  const judgeName = judgeCell.textContent!.replace(/\s+/g, " ").trim();
   const judgeHref = judgeLink.getAttribute("href");
   return { judgeName, judgeHref };
 };
@@ -149,7 +146,12 @@ const extractJudgeInfo = (judgeCell: Element) => {
  * @returns The number of entries, the standard completion time (SCT), and the distance of the course.
  */
 const extractEntriesInfo = (entriesCell: Element) => {
-  const entriesData = entriesCell.innerText.replace(/\s+/g, " ").trim();
+  const innerText = entriesCell.textContent;
+  if (!innerText) {
+    console.error("Could not find inner text.");
+    return;
+  }
+  const entriesData = innerText.replace(/\s+/g, " ").trim();
   if (!entriesData) {
     console.error(`Entries data doesn't match:, ${entriesData}`);
     return;
@@ -165,7 +167,7 @@ const extractEntriesInfo = (entriesCell: Element) => {
 
   // If we didn't match the entries data at all, or there aren't any match groups, return nothing.
   if (!matches || !matches.groups) {
-    logger.debug(`Could not find a match with entries regex: ${entriesData}`)
+    logger.debug(`Could not find a match with entries regex: ${entriesData}`);
     return;
   }
 

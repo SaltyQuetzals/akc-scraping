@@ -1,34 +1,36 @@
 import {
   Event,
   extractEventInfo as extractGeneralEventInfo,
-} from "./akc-event-api.ts";
+} from "./akc-event-api";
 import {
   extractClassInfo,
   extractEntriesInfo,
   extractJudgeInfo,
   isTrialRow,
-} from "./event-page.ts";
+} from "./event-page";
+import fetch from "cross-fetch";
+import { JSDOM } from "jsdom";
 
-import { dogs, runs } from "./db.ts";
+// import { dogs, runs } from "./db";
 
-import { extractDogInfo, extractPointsInfo } from "./placement-page.ts";
+import { extractDogInfo, extractPointsInfo } from "./placement-page";
 
-import {
-  DOMParser,
-  Element,
-  initParser,
-} from "https://deno.land/x/deno_dom/deno-dom-wasm-noinit.ts";
-import { PromisePool } from "https://cdn.skypack.dev/@supercharge/promise-pool?dts";
-import { Bson } from "https://deno.land/x/mongo/mod.ts";
-import { logger } from "./logging.ts";
+import { PromisePool } from "@supercharge/promise-pool";
+import { logger } from "./logging";
+import { writeFile } from "fs";
+import { promisify } from "util";
+import { DogModel, RunModel } from "./db";
+// import { DogModel } from "./db";
 
 const START_YEAR = 2021;
 const START_MONTH = 0; // January
 const START_DAY = 1;
 const START_DATE = new Date(START_YEAR, START_MONTH, START_DAY);
 const DOMAIN = "https://www.apps.akc.org";
-const EVENT_CONCURRENCY = 10;
-const PLACEMENT_CONCURRENCY = 10;
+const EVENT_CONCURRENCY = 1;
+const PLACEMENT_CONCURRENCY = 1;
+
+const writeFilePromise = promisify(writeFile);
 
 interface CompetitionEntry {
   runName: string;
@@ -84,10 +86,7 @@ const addPlacementDetails = async (entry: CompetitionEntry) => {
   const detailsPageHtml = await fetch(detailsPageUrl).then((response) =>
     response.text()
   );
-  const document = new DOMParser().parseFromString(
-    detailsPageHtml,
-    "text/html",
-  );
+  const { document } = (new JSDOM(detailsPageHtml)).window;
   if (!document) {
     logger.warning(`Could not read HTML response of ${detailsPageUrl}`);
     return;
@@ -101,13 +100,15 @@ const addPlacementDetails = async (entry: CompetitionEntry) => {
   }
   const detailsData = Array.from(fontTags).map((fontTag) => {
     const parentRow = fontTag.parentElement!.parentElement!;
-    const [_a, _b, _c, placeCell, dogCell, pointsCell] = parentRow.children;
+    const [_a, _b, _c, placeCell, dogCell, pointsCell] = Array.from(
+      parentRow.children,
+    ) as Element[];
     const { dogBreed, dogHandler, registeredName, akcRegistrationNumber } =
       extractDogInfo(
         dogCell,
       );
     const { points, time } = extractPointsInfo(pointsCell);
-    const placeStr = placeCell.innerText.replace(/\s+/g, " ").trim();
+    const placeStr = placeCell.textContent!.replace(/\s+/g, " ").trim();
     const place = placeStr.match(/\d+/g)?.[0] || null;
     return {
       place,
@@ -138,13 +139,10 @@ const extractCompetitionInfoForEvent = async (
   const html = await fetch(url).then((response) => response.text());
 
   // Write the text file locally, for debugging purposes.
-  await Deno.writeTextFile(
-    `outputs/${eventAndClubInfo.eventNumber}.html`,
-    html,
-  );
+  await writeFilePromise(`outputs/${eventAndClubInfo.eventNumber}.html`, html);
 
   // Parse the text we got back from the server, and if it isn't valid HTML, move on.
-  const document = new DOMParser().parseFromString(html, "text/html");
+  const { document } = (new JSDOM(html)).window;
   if (!document) {
     logger.warning(`Cannot parse HTML, skipping.`, url);
     return;
@@ -165,17 +163,17 @@ const extractCompetitionInfoForEvent = async (
     url,
   );
 
-  const competitionData = filteredRows.map((row) => {
+  const competitionData = filteredRows.map((row: Element) => {
     const [_, eventCell, judgeCell, entriesCell] = Array.from(
-      (row as Element).children,
-    );
+      row.children,
+    ) as HTMLElement[];
     const entriesInfo = extractEntriesInfo(entriesCell);
     const judgeInfo = extractJudgeInfo(judgeCell);
     const classInfo = extractClassInfo(eventCell);
     if (!entriesInfo || !judgeInfo || !classInfo) {
       // We're only interested in competitions where all the cells are valid
       // (i.e. there was a judge, there were entries, and there was class information)
-      logger.debug(
+      console.log(
         `A row was missing required information, skipping`,
         url,
         JSON.stringify(classInfo),
@@ -221,20 +219,20 @@ const extractCompetitionInfoForEvent = async (
       continue;
     }
     for (const place of result.placements) {
-      const matchingDog = await dogs.findOne({
+      const matchingDog = await DogModel.findOne({
         AKCnum: place.akcRegistrationNumber,
       });
-      let dogId: Bson.ObjectId;
+      let dogId;
       if (!matchingDog) {
         logger.debug(
           "Could not find a dog with AKC registration number",
           place.akcRegistrationNumber,
           result.classHref,
         );
-        dogId = await dogs.insertOne({
-          Name: place.registeredName,
-          AKCnum: place.akcRegistrationNumber,
-        });
+        // dogId = await DogModel.create({
+        //   Name: place.registeredName,
+        //   AKCnum: place.akcRegistrationNumber,
+        // });
       } else {
         dogId = matchingDog._id;
       }
@@ -249,18 +247,19 @@ const extractCompetitionInfoForEvent = async (
         SCT: result.standardCompletionTime,
         Yards: result.numYards,
       };
-      const matchingRun = await runs.findOne(runCriteria);
+      const matchingRun = await RunModel.findOne(runCriteria);
       if (!matchingRun) {
         logger.debug(
           "Could not find a run matching run criteria, inserting",
           result.classHref,
           JSON.stringify(runCriteria),
         );
-        await runs.insertOne(runCriteria);
+        await RunModel.create(runCriteria);
       }
     }
+
   }
-  return Deno.writeTextFile(
+  return writeFilePromise(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
     JSON.stringify(results),
   );
@@ -268,13 +267,10 @@ const extractCompetitionInfoForEvent = async (
 
 const main = async () => {
   const today = new Date();
-  logger.debug("Initializing HTML parser...");
-  await initParser();
   for (const [start, end] of monthlyIntervals(START_DATE, today)) {
     const results = await fetch(
       "https://webapps.akc.org/event-search/api/search/events",
       {
-        "credentials": "include",
         "headers": {
           "User-Agent":
             "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:94.0) Gecko/20100101 Firefox/94.0",
@@ -325,10 +321,9 @@ const main = async () => {
           },
         ),
         "method": "POST",
-        "mode": "cors",
       },
-    ).then((response) => response.json());
-    const extractedFilteredEvents = (results.events as Event[]).map(
+    ).then((response) => response.json()) as { events: Event[] };
+    const extractedFilteredEvents = (results.events).map(
       extractGeneralEventInfo,
     ).filter((event) => event.endDate < today);
     logger.info(
@@ -340,6 +335,7 @@ const main = async () => {
     for (const error of errors) {
       console.error(error);
     }
+    break;
   }
 };
 
