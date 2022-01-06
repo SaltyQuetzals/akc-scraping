@@ -1,7 +1,11 @@
-import { createLogger, transports } from "winston";
+import { createLogger, format, transports } from "winston";
 
 export const logger = createLogger({
-  level: "debug",
+  level: "info",
+  format: format.combine(
+    format.colorize(),
+    format.simple(),
+  ),
   transports: [
     new transports.Console(),
     new transports.File({ filename: "log.txt" }),

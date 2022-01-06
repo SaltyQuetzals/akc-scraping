@@ -1,5 +1,6 @@
 // deno-lint-ignore-file camelcase
 import { connect, model, Schema, Types } from "mongoose";
+import { logger } from "./logging";
 
 export interface Dog {
   // _id: Types.ObjectId;
@@ -11,8 +12,6 @@ const dogSchema = new Schema<Dog>({
   Name: { type: String, required: true },
   AKCnum: { type: String, required: false },
 });
-
-export const DogModel = model<Dog>("Dog", dogSchema);
 
 export interface Run {
   _id: Types.ObjectId;
@@ -93,4 +92,16 @@ const runSchema = new Schema<Run>({
   Yards: { type: Number, required: false },
 });
 
+const mongoUri = process.env["MONGODB_URI"];
+if (!mongoUri) {
+  throw new Error("The MONGODB_URI environment variable must be set.");
+}
+
+export const connectToDb = async () => {
+  logger.info("Connecting to MongoDB...");
+  await connect(mongoUri);
+  logger.info("Connected successfully.");
+};
+
+export const DogModel = model<Dog>("Dog", dogSchema);
 export const RunModel = model<Run>("Run", runSchema);

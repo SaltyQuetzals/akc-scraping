@@ -11,24 +11,21 @@ import {
 import fetch from "cross-fetch";
 import { JSDOM } from "jsdom";
 
-// import { dogs, runs } from "./db";
-
 import { extractDogInfo, extractPointsInfo } from "./placement-page";
 
 import { PromisePool } from "@supercharge/promise-pool";
 import { logger } from "./logging";
 import { writeFile } from "fs";
 import { promisify } from "util";
-import { DogModel, RunModel } from "./db";
-// import { DogModel } from "./db";
+import { connectToDb, DogModel, RunModel } from "./db";
 
 const START_YEAR = 2021;
 const START_MONTH = 0; // January
 const START_DAY = 1;
 const START_DATE = new Date(START_YEAR, START_MONTH, START_DAY);
 const DOMAIN = "https://www.apps.akc.org";
-const EVENT_CONCURRENCY = 1;
-const PLACEMENT_CONCURRENCY = 1;
+const EVENT_CONCURRENCY = 10;
+const PLACEMENT_CONCURRENCY = 10;
 
 const writeFilePromise = promisify(writeFile);
 
@@ -88,14 +85,14 @@ const addPlacementDetails = async (entry: CompetitionEntry) => {
   );
   const { document } = (new JSDOM(detailsPageHtml)).window;
   if (!document) {
-    logger.warning(`Could not read HTML response of ${detailsPageUrl}`);
+    logger.warn(`Could not read HTML response of ${detailsPageUrl}`);
     return;
   }
   const fontTags = document.querySelectorAll(
     'td[align="right"] > font',
   );
   if (!fontTags) {
-    logger.warning(`Could not find font tags on ${detailsPageUrl}`);
+    logger.warn(`Could not find font tags on ${detailsPageUrl}`);
     return;
   }
   const detailsData = Array.from(fontTags).map((fontTag) => {
@@ -144,7 +141,7 @@ const extractCompetitionInfoForEvent = async (
   // Parse the text we got back from the server, and if it isn't valid HTML, move on.
   const { document } = (new JSDOM(html)).window;
   if (!document) {
-    logger.warning(`Cannot parse HTML, skipping.`, url);
+    logger.warn(`Cannot parse HTML, skipping.`, url);
     return;
   }
 
@@ -153,7 +150,7 @@ const extractCompetitionInfoForEvent = async (
     "html body table tbody tr td div font table tbody tr",
   );
   if (!competitionRows) {
-    logger.warning(`Could not find competition rows`, url);
+    logger.warn(`Could not find competition rows`, url);
     return;
   }
   // Filter out any rows that don't belong to competition trials.
@@ -257,7 +254,6 @@ const extractCompetitionInfoForEvent = async (
         await RunModel.create(runCriteria);
       }
     }
-
   }
   return writeFilePromise(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
@@ -266,6 +262,7 @@ const extractCompetitionInfoForEvent = async (
 };
 
 const main = async () => {
+  await connectToDb();
   const today = new Date();
   for (const [start, end] of monthlyIntervals(START_DATE, today)) {
     const results = await fetch(
