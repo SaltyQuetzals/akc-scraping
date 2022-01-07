@@ -19,6 +19,7 @@ import { stat, writeFile } from 'fs';
 import { promisify } from 'util';
 import { DogModel, RunModel, connectToDb } from './db';
 import { exit } from 'process';
+import { Types } from 'mongoose';
 
 const START_YEAR = 2021;
 const START_MONTH = 0; // January
@@ -237,30 +238,40 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
   for (const error of errors) {
     logger.error(error.message, url);
   }
+  const scrapedDogInfo = results.flatMap(result => result
+    ? result.placements.map((place) => ({AKCnum: place.akcRegistrationNumber, Name: place.registeredName}))
+    : [])
+  const scrapedDogAKCNums = scrapedDogInfo.map(({AKCnum}) => AKCnum)
+  // We're going to take advantage of the fact that "upsert" will create a document if no matching document is found.
+  // So rather than doing a lot of complicated logic filtering/grouping, we're going to do an "update" that overwrites the value of an
+  // existing document with the same document (basically a no-op) and inserts new documents if no document matches the
+  // given criteria.
+  const dogUpdateOperations = scrapedDogInfo.map((dog) => ({
+    updateOne: {
+      filter: dog,
+      update: dog,
+      upsert: true,
+    }
+  }))
+  const dogWriteResult = await DogModel.bulkWrite(dogUpdateOperations, { ordered: false });
+  logger.debug(`Have a total of ${scrapedDogInfo.length} dogs scraped.`)
+  logger.debug(`Matched ${dogWriteResult.matchedCount} dogs, upserted ${dogWriteResult.upsertedCount} dogs, modified ${dogWriteResult.modifiedCount} dogs`);
+  // Now that we've basically guaranteed that all of the dogs are in the database, let's fetch them all to get the ObjectIds!
+  const dogs = await DogModel.find({ AKCnum: { $in: scrapedDogAKCNums } }, { AKCnum: true, _id: true }).exec();
+  // Make a map from AKC registration number to MongoDB ObjectId
+  const akcNumToObjectId = new Map<string, Types.ObjectId>(dogs.map(dog => ([dog.AKCnum!, dog._id])));
+  const runUpdateOperations = [];
   for (const result of results) {
     if (!result) {
       continue;
     }
     for (const place of result.placements) {
-      const matchingDog = await DogModel.findOne({
-        AKCnum: place.akcRegistrationNumber,
-      });
-      let dogId;
-      if (!matchingDog) {
-        logger.debug(
-          'Could not find a dog with AKC registration number',
-          place.akcRegistrationNumber,
-          result.classHref
-        );
-        dogId = await DogModel.create({
-          Name: place.registeredName,
-          AKCnum: place.akcRegistrationNumber,
-        });
-      } else {
-        dogId = matchingDog._id;
+      const dogObjectId = akcNumToObjectId.get(place.akcRegistrationNumber);
+      if (!dogObjectId) {
+        throw Error(`Could not find ${place.akcRegistrationNumber} in the AKC Num -> ObjectID map.`)
       }
       const runCriteria = {
-        Dog: dogId,
+        Dog: dogObjectId,
         CurrentDate: eventAndClubInfo.startDate,
         Division: result.division,
         Class: result.className,
@@ -270,17 +281,17 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
         SCT: result.standardCompletionTime,
         Yards: result.numYards,
       };
-      const matchingRun = await RunModel.findOne(runCriteria);
-      if (!matchingRun) {
-        logger.debug(
-          'Could not find a run matching run criteria, inserting',
-          result.classHref,
-          JSON.stringify(runCriteria)
-        );
-        await RunModel.create(runCriteria);
-      }
+      runUpdateOperations.push({
+        updateOne: {
+          filter: runCriteria,
+          update: runCriteria,
+          upsert: true
+        }
+      })
     }
   }
+  const runWriteResult = await RunModel.bulkWrite(runUpdateOperations, { ordered: false });
+  logger.debug(`Matched ${runWriteResult.matchedCount} runs, upserted ${runWriteResult.upsertedCount} runs, modified ${runWriteResult.modifiedCount} runs`);
   return writeFilePromise(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
     JSON.stringify(results)
