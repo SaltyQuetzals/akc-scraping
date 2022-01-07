@@ -152,9 +152,9 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
   startDate: Date;
   endDate: Date;
 }) => {
-  const cachedHtmlPath = `outputs/${eventAndClubInfo.eventNumber}.json`
+  const cachedHtmlPath = `outputs/${eventAndClubInfo.eventNumber}.html`
   const url = `${DOMAIN}/apps/events/search/index_results.cfm?action=plan&event_number=${eventAndClubInfo.eventNumber}&get_event_by_number=yes&NEW_END_DATE1=`;
-  logger.debug('Fetching HTML', url);
+  logger.debug(`Fetching HTML for event ${eventAndClubInfo.eventNumber}`);
   const html = await retryOnFail(fetch(url).then(response => response.text()));
   // Write the text file locally, for debugging purposes.
   await writeFilePromise(cachedHtmlPath, html);
@@ -177,8 +177,7 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
   // Filter out any rows that don't belong to competition trials.
   const filteredRows = Array.from(competitionRows).filter(isTrialRow);
   logger.debug(
-    `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows`,
-    url
+    `Initially captured ${competitionRows.length} rows, filtered down to ${filteredRows.length} rows (event_num: ${eventAndClubInfo.eventNumber})`,
   );
 
   const competitionData = filteredRows
@@ -224,7 +223,7 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
         entry.numYards !== null
     );
   logger.debug(
-    `Successfully got data for ${competitionData.length} competitions`,
+    `Successfully parsed data for ${competitionData.length} competitions (event_num: ${eventAndClubInfo.eventNumber})`,
     url
   );
   const { results, errors } = await PromisePool.withConcurrency(
