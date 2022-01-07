@@ -13,6 +13,8 @@ runs on [Node.js](https://nodejs.org/).
 
 1. Download Node (preferably v14.18.2)
 1. Have the Meteor server running in the background
+1. Run `npm install`, which will install all of this script's dependencies
+1. Create a directory `outputs`, which will be used to store information
 
 ### Compiling
 

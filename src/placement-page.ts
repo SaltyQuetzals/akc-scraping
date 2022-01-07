@@ -4,21 +4,20 @@
  * @returns The name of the dog handler, the AKC-registered name of the dog, the dog's breed, and the dog's ID within AKC.
  */
 const extractDogInfo = (dogCell: Element) => {
-  const dogLink = dogCell.querySelector("a.white") as HTMLElement;
+  const dogLink = dogCell.querySelector('a.white') as HTMLElement;
   const dogCellTextContent = dogCell.textContent!;
-  const dogBreed = dogCell.getElementsByTagName("i")[0].textContent!.replace(
-    /\s+/g,
-    " ",
-  );
+  const dogBreed = dogCell
+    .getElementsByTagName('i')[0]
+    .textContent!.replace(/\s+/g, ' ');
   const dogHandler = dogCellTextContent
     .slice(dogCellTextContent.indexOf(dogBreed) + dogBreed?.length)
     .trim(); // The handler information immediately follows the dog's breed, so just slice the string from the end of the dog breed substring.
-  const registeredName = dogLink?.textContent!.replace(/\s+/g, " ").trim()!;
+  const registeredName = dogLink?.textContent!.replace(/\s+/g, ' ').trim()!;
   // The ID of the dog is buried in the href of the dog link, so parse the URL and extract the query parameter matching the ID.
   const akcRegistrationNumber = new URL(
-    `https://www.apps.akc.org${dogLink?.getAttribute("href")}`,
-  ).searchParams.get("dog_id")!;
-  return { dogHandler, registeredName, dogBreed, akcRegistrationNumber };
+    `https://www.apps.akc.org${dogLink?.getAttribute('href')}`
+  ).searchParams.get('dog_id')!;
+  return {dogHandler, registeredName, dogBreed, akcRegistrationNumber};
 };
 
 /**
@@ -27,10 +26,12 @@ const extractDogInfo = (dogCell: Element) => {
  * @returns The number of points the dog scored, as well as what time they achieved.
  */
 const extractPointsInfo = (pointsCell: Element) => {
-  const pointsCellTextContent = pointsCell.textContent!.replace(/\s/g, " ").trim();
-  const match = /(?:pts\s+(?<points>[\d\.]+)\s+)?(?:Time\s+(?<time>[\d\.]+))?/g
-    .exec(
-      pointsCellTextContent,
+  const pointsCellTextContent = pointsCell
+    .textContent!.replace(/\s/g, ' ')
+    .trim();
+  const match =
+    /(?:pts\s+(?<points>[\d\.]+)\s+)?(?:Time\s+(?<time>[\d\.]+))?/g.exec(
+      pointsCellTextContent
     );
   return {
     points: parseFloat(match?.groups!.points!),
@@ -38,4 +39,4 @@ const extractPointsInfo = (pointsCell: Element) => {
   };
 };
 
-export { extractDogInfo, extractPointsInfo };
+export {extractDogInfo, extractPointsInfo};

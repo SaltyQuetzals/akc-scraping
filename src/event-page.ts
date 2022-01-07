@@ -1,18 +1,18 @@
-import { logger } from "./logging";
+import {logger} from './logging';
 
 export const parseAgRunName = (runName: string) => {
   const agRegex =
     /^Ag\s*(?<className>FAST|JWW|Colors)?\s*(?<division>[^\(]+)\((?<height>\d+)/g;
-  runName = runName.replace(/\s+/g, " ").trim();
+  runName = runName.replace(/\s+/g, ' ').trim();
   const runMatches = agRegex.exec(runName);
   const groups = runMatches?.groups!;
   if (!groups) {
     console.error(
-      `Got a runName that started with Ag, but no groups were matched: ${runName}`,
+      `Got a runName that started with Ag, but no groups were matched: ${runName}`
     );
     return;
   }
-  let className = "Standard";
+  let className = 'Standard';
   if (groups.className) {
     className = groups.className;
   }
@@ -28,17 +28,17 @@ export const parseAgRunName = (runName: string) => {
 const parseT2BRunName = (runName: string) => {
   const t2bRegex = /(?<t2b>Time 2 Beat)(?<division>[^\(]+)\((?<height>\d+)/g;
   const runMatches = t2bRegex.exec(runName);
-  const className = "T2B"; // We know that this is right because we're in this function.
+  const className = 'T2B'; // We know that this is right because we're in this function.
   if (!runMatches) {
     console.error(
-      `Got a runName that started with Ag, but wouldn't match regex: ${runName}`,
+      `Got a runName that started with Ag, but wouldn't match regex: ${runName}`
     );
     return;
   }
   const groups = runMatches.groups;
   if (!groups) {
     console.error(
-      `Got a runName that started with Ag, but no groups were matched: ${runName}`,
+      `Got a runName that started with Ag, but no groups were matched: ${runName}`
     );
     return;
   }
@@ -53,45 +53,47 @@ const parseT2BRunName = (runName: string) => {
 /**
  * Parses a competition class cell. Class cells look something like this:
  * <td colspan="4" valign="top">
-		<font size="-1" face="sans-serif, Arial, helvetica">
-			<div align="center">
-				<strong>
-					<a name="4"></a>
-					<a class="white" href="JavaScript: event_info = openWin('/apps/events/search/index_results.cfm?action=event_info&amp;comp_type=AG&amp;status=RSLT&amp;int_ref=4&amp;event_number=2020526309&amp;cde_comp_group=AG&amp;cde_comp_type=AG&amp;NEW_END_DATE1=&amp;key_stkhldr_event=133131731&amp;mixed_breed=N', 'eventinfo', 'width=800,height=600,toolbar=1,location=0,directories=0,status=0,menuBar=0,scrollBars=1,resizable=1' ); event_info.focus()">
-						<strong>Ag Novice A (24 INCHES)</strong>
-					</a>
-				</strong>
-			</div>
-		</font>
-	</td>
+    <font size="-1" face="sans-serif, Arial, helvetica">
+      <div align="center">
+        <strong>
+          <a name="4"></a>
+          <a class="white" href="JavaScript: event_info = openWin('/apps/events/search/index_results.cfm?action=event_info&amp;comp_type=AG&amp;status=RSLT&amp;int_ref=4&amp;event_number=2020526309&amp;cde_comp_group=AG&amp;cde_comp_type=AG&amp;NEW_END_DATE1=&amp;key_stkhldr_event=133131731&amp;mixed_breed=N', 'eventinfo', 'width=800,height=600,toolbar=1,location=0,directories=0,status=0,menuBar=0,scrollBars=1,resizable=1' ); event_info.focus()">
+            <strong>Ag Novice A (24 INCHES)</strong>
+          </a>
+        </strong>
+      </div>
+    </font>
+  </td>
  * @param classCell The <td> tag containing a competition class anchor.
  * @returns The name of the competition class, and a path to its placement data.
  */
 const extractClassInfo = (classCell: Element) => {
-  const classLink = classCell.querySelector("a.white");
+  const classLink = classCell.querySelector('a.white');
   if (!classLink) {
-    console.error("Could not find a class link. Cannot extract class info.");
+    console.error('Could not find a class link. Cannot extract class info.');
     return;
   }
   // The AKC page uses some kind of framework for opening links with JavaScript, but since we're interacting with HTML,
   // let's just parse out the path from the JavaScript code in the "href" attribute of the class link.
-  const classHref =
-    /openWin\('(?<href>[^']+)/g.exec(classLink.getAttribute("href")!)!
-      .groups!.href;
+  const classHref = /openWin\('(?<href>[^']+)/g.exec(
+    classLink.getAttribute('href')!
+  )!.groups!.href;
   const runName = classLink.textContent!;
   try {
-    let result: {
-      className: string | null;
-      height: number | null;
-      division: string | null;
-    } | undefined;
-    if (runName.startsWith("Ag")) {
+    let result:
+      | {
+          className: string | null;
+          height: number | null;
+          division: string | null;
+        }
+      | undefined;
+    if (runName.startsWith('Ag')) {
       result = parseAgRunName(runName);
-    } else if (runName.startsWith("Time 2 Beat")) {
+    } else if (runName.startsWith('Time 2 Beat')) {
       result = parseT2BRunName(runName);
     } else {
       console.error(
-        `Encountered unknown run name: ${runName}. HREF = ${classHref}`,
+        `Encountered unknown run name: ${runName}. HREF = ${classHref}`
       );
       return;
     }
@@ -99,7 +101,7 @@ const extractClassInfo = (classCell: Element) => {
       console.error(`Got an empty result after parsing. HREF = ${classHref}`);
       return;
     }
-    const { className, division, height } = result;
+    const {className, division, height} = result;
 
     return {
       runName,
@@ -121,37 +123,37 @@ const extractClassInfo = (classCell: Element) => {
       <font size="-1" face="sans-serif, Arial, helvetica">
         <a class="white" href="/apps/judges_directory/index.cfm?action=refresh_index_init&amp;judge_id=90966"> M  Fletcher </a>
       </font>
-	  </td>
+    </td>
  * @param judgeCell The <td> tag containing a judge anchor.
  * @returns The name of the judge, as well as a path to the judge's information.
  */
 const extractJudgeInfo = (judgeCell: Element) => {
-  const judgeLink = judgeCell.querySelector("a.white");
+  const judgeLink = judgeCell.querySelector('a.white');
   if (!judgeLink) {
-    console.error("Could not find a judge link.");
+    console.error('Could not find a judge link.');
     return;
   }
-  const judgeName = judgeCell.textContent!.replace(/\s+/g, " ").trim();
-  const judgeHref = judgeLink.getAttribute("href");
-  return { judgeName, judgeHref };
+  const judgeName = judgeCell.textContent!.replace(/\s+/g, ' ').trim();
+  const judgeHref = judgeLink.getAttribute('href');
+  return {judgeName, judgeHref};
 };
 
 /**
  * Parses an entries cell, returning the number of entries, the standard completion time (if listed), and the number of yards (if listed)
  * Entries cells look like:
  *  <td colspan="2" valign="top">
-		  <font size="-1" face="sans-serif, Arial, helvetica">(1ent)</font>
-	  </td>
+      <font size="-1" face="sans-serif, Arial, helvetica">(1ent)</font>
+    </td>
  * @param entriesCell The <td> containing info about the number of entries in a competition
  * @returns The number of entries, the standard completion time (SCT), and the distance of the course.
  */
 const extractEntriesInfo = (entriesCell: Element) => {
   const innerText = entriesCell.textContent;
   if (!innerText) {
-    console.error("Could not find inner text.");
+    console.error('Could not find inner text.');
     return;
   }
-  const entriesData = innerText.replace(/\s+/g, " ").trim();
+  const entriesData = innerText.replace(/\s+/g, ' ').trim();
   if (!entriesData) {
     console.error(`Entries data doesn't match:, ${entriesData}`);
     return;
@@ -180,7 +182,7 @@ const extractEntriesInfo = (entriesCell: Element) => {
   if (matches.groups.yards) {
     numYards = parseInt(matches.groups.yards);
   }
-  return { numEntries, standardCompletionTime, numYards };
+  return {numEntries, standardCompletionTime, numYards};
 };
 
 /**
@@ -194,8 +196,10 @@ const isTrialRow = (row: Node) => {
     return false;
   }
   const firstChild = elem.children[1];
-  return firstChild.hasAttribute("colspan") &&
-    firstChild.getAttribute("colspan") === "4";
+  return (
+    firstChild.hasAttribute('colspan') &&
+    firstChild.getAttribute('colspan') === '4'
+  );
 };
 
-export { extractClassInfo, extractEntriesInfo, extractJudgeInfo, isTrialRow };
+export {extractClassInfo, extractEntriesInfo, extractJudgeInfo, isTrialRow};

@@ -1,6 +1,6 @@
 // deno-lint-ignore-file camelcase
-import { connect, model, Schema, Types } from "mongoose";
-import { logger } from "./logging";
+import {connect, model, Schema, Types} from 'mongoose';
+import {logger} from './logging';
 
 export interface Dog {
   // _id: Types.ObjectId;
@@ -9,8 +9,8 @@ export interface Dog {
 }
 
 const dogSchema = new Schema<Dog>({
-  Name: { type: String, required: true },
-  AKCnum: { type: String, required: false },
+  Name: {type: String, required: true},
+  AKCnum: {type: String, required: false},
 });
 
 export interface Run {
@@ -84,24 +84,24 @@ const runSchema = new Schema<Run>({
     type: String,
     required: false,
   },
-  Class: { type: String, required: false },
-  Height: { type: String, required: false },
-  Judge: { type: String, required: false },
-  Place: { type: Number, required: false },
-  SCT: { type: Number, required: false },
-  Yards: { type: Number, required: false },
+  Class: {type: String, required: false},
+  Height: {type: String, required: false},
+  Judge: {type: String, required: false},
+  Place: {type: Number, required: false},
+  SCT: {type: Number, required: false},
+  Yards: {type: Number, required: false},
 });
 
-const mongoUri = process.env["MONGODB_URI"];
+const mongoUri = process.env['MONGODB_URI'];
 if (!mongoUri) {
-  throw new Error("The MONGODB_URI environment variable must be set.");
+  throw new Error('The MONGODB_URI environment variable must be set.');
 }
 
 export const connectToDb = async () => {
-  logger.info("Connecting to MongoDB...");
+  logger.info('Connecting to MongoDB...');
   await connect(mongoUri);
-  logger.info("Connected successfully.");
+  logger.info('Connected successfully.');
 };
 
-export const DogModel = model<Dog>("Dog", dogSchema);
-export const RunModel = model<Run>("Run", runSchema);
+export const DogModel = model<Dog>('Dog', dogSchema);
+export const RunModel = model<Run>('Run', runSchema);
