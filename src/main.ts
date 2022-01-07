@@ -15,7 +15,7 @@ import { extractDogInfo, extractPointsInfo } from './placement-page';
 
 import { PromisePool } from '@supercharge/promise-pool';
 import { logger } from './logging';
-import { stat, writeFile } from 'fs';
+import { writeFile } from 'fs';
 import { promisify } from 'util';
 import { DogModel, RunModel, connectToDb } from './db';
 import { exit } from 'process';
@@ -29,13 +29,12 @@ const DOMAIN = 'https://www.apps.akc.org';
 const NUM_RETRIES = 3;
 const RETRY_DELAY = 5000; // ms
 
-// Note that the maximum number of simultaneous requests being sent to the server is EVENT_CONCURRENCY * PLACEMENT_CONCURRENCY.
+// Note that the maximum number of simultaneous requests sent to the server is EVENT_CONCURRENCY * PLACEMENT_CONCURRENCY.
 // Increasing these numbers by too much might mean getting rate-limited or IP-banned.
 const EVENT_CONCURRENCY = 10;
 const PLACEMENT_CONCURRENCY = 100;
 
 const writeFilePromise = promisify(writeFile);
-const statPromise = promisify(stat);
 const delay = promisify(setTimeout);
 
 interface CompetitionEntry {
@@ -231,7 +230,7 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
   )
     .for(competitionData)
     .process(addPlacementDetails);
-  logger.info(
+  logger.debug(
     `Collected placement details for ${competitionData.length} competitions (event_num: ${eventAndClubInfo.eventNumber})`
   );
   for (const error of errors) {
@@ -291,6 +290,7 @@ const extractCompetitionInfoForEvent = async (eventAndClubInfo: {
   }
   const runWriteResult = await RunModel.bulkWrite(runUpdateOperations, { ordered: false });
   logger.debug(`Matched ${runWriteResult.matchedCount} runs, upserted ${runWriteResult.upsertedCount} runs, modified ${runWriteResult.modifiedCount} runs`);
+  logger.info(`Finished parsing event ${eventAndClubInfo.eventNumber}.`)
   return writeFilePromise(
     `outputs/${eventAndClubInfo.eventNumber}.json`,
     JSON.stringify(results)
