@@ -31,8 +31,8 @@ const RETRY_DELAY = 5000; // ms
 
 // Note that the maximum number of simultaneous requests sent to the server is EVENT_CONCURRENCY * PLACEMENT_CONCURRENCY.
 // Increasing these numbers by too much might mean getting rate-limited or IP-banned.
-const EVENT_CONCURRENCY = 10;
-const PLACEMENT_CONCURRENCY = 100;
+const EVENT_CONCURRENCY = 100;
+const PLACEMENT_CONCURRENCY = 10;
 
 const writeFilePromise = promisify(writeFile);
 const delay = promisify(setTimeout);
